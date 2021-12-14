@@ -129,7 +129,6 @@ async def join_call(audio, video, width, height, seek=False):
                 del Config.GET_FILE["old"]
             except:
                 LOGGER.error("Error in deletion !")
-                pass
         await send_playlist()
 
 
@@ -150,7 +149,7 @@ async def join_and_play(audio, video, width, height):
                     height=height,
                     frame_rate=30,
                 ),
-                
+
             ),
             stream_type=StreamType().local_stream
         )
@@ -167,7 +166,6 @@ async def join_and_play(audio, video, width, height):
             await restart_playout()
         except Exception as e:
             LOGGER.error(f"Unable to start new GroupCall - {e}")
-            pass
     except Exception as e:
         LOGGER.error(f"Errors Occured while joining, retrying - {e}")
         return False
@@ -205,23 +203,22 @@ async def seek_file(seektime):
     play_start=int(float(Config.DUR.get('TIME')))
     if not play_start:
         return False, "⛔️ Streaming Not Yet Started !"
-    else:
-        data=Config.DATA.get("FILE_DATA")
-        if not data:
-            return False, "⛔️ No Stream For Seeking !"        
-        played=int(float(time.time())) - int(float(play_start))
-        if data.get("dur", 0) == 0:
-            return False, "⛔️ Seems Like An Live Stream / Startup Stream Is Streaming !"
-        total=int(float(data.get("dur", 0)))
-        trimend = total - played - int(seektime)
-        trimstart = played + int(seektime)
-        if trimstart > total:
-            return False, "⛔️ Seeked Duration Exceeds Maximum Duration Of Video !"
-        new_play_start=int(play_start) - int(seektime)
-        Config.DUR['TIME']=new_play_start
-        raw_audio, raw_video, width, height = await get_raw_files(data.get("file"), seek={"start":trimstart, "end":trimend})
-        await join_call(raw_audio, raw_video, width, height, seek=True)
-        return True, None
+    data=Config.DATA.get("FILE_DATA")
+    if not data:
+        return False, "⛔️ No Stream For Seeking !"
+    played=int(float(time.time())) - int(float(play_start))
+    if data.get("dur", 0) == 0:
+        return False, "⛔️ Seems Like An Live Stream / Startup Stream Is Streaming !"
+    total=int(float(data.get("dur", 0)))
+    trimend = total - played - int(seektime)
+    trimstart = played + int(seektime)
+    if trimstart > total:
+        return False, "⛔️ Seeked Duration Exceeds Maximum Duration Of Video !"
+    new_play_start=int(play_start) - int(seektime)
+    Config.DUR['TIME']=new_play_start
+    raw_audio, raw_video, width, height = await get_raw_files(data.get("file"), seek={"start":trimstart, "end":trimend})
+    await join_call(raw_audio, raw_video, width, height, seek=True)
+    return True, None
 
 
 async def leave_call():
@@ -322,24 +319,33 @@ async def get_link(file):
                 continue
         if url:
             return url
-        else:
-            LOGGER.error(f"Errors occured while getting link from youtube video - No Video Formats Found !")
-            await skip()
-            return False
+        LOGGER.error(
+            'Errors occured while getting link from youtube video - No Video Formats Found !'
+        )
+
+        await skip()
+        return False
 
 
 async def download(song, msg=None):
-    if song[3] == "telegram":
-        if not Config.GET_FILE.get(song[5]):
-            try: 
-                original_file = await bot.download_media(song[2], progress=progress_bar, file_name=f'./tgdownloads/', progress_args=(int((song[5].split("_"))[1]), time.time(), msg))
-                Config.GET_FILE[song[5]]=original_file
-            except Exception as e:
-                LOGGER.error(e)
-                Config.playlist.remove(song)
-                if len(Config.playlist) <= 1:
-                    return
-                await download(Config.playlist[1])
+    if song[3] != "telegram":
+        return
+    if not Config.GET_FILE.get(song[5]):
+        try: 
+            original_file = await bot.download_media(
+                song[2],
+                progress=progress_bar,
+                file_name='./tgdownloads/',
+                progress_args=(int((song[5].split("_"))[1]), time.time(), msg),
+            )
+
+            Config.GET_FILE[song[5]]=original_file
+        except Exception as e:
+            LOGGER.error(e)
+            Config.playlist.remove(song)
+            if len(Config.playlist) <= 1:
+                return
+            await download(Config.playlist[1])
 
 
 async def get_raw_files(link, seek=False):
@@ -409,10 +415,7 @@ async def kill_process():
 
 
 async def edit_title():
-    if not Config.playlist:
-        title = "STREAM 24/7 | LIVE"
-    else:       
-        title = Config.playlist[0][1]
+    title = "STREAM 24/7 | LIVE" if not Config.playlist else Config.playlist[0][1]
     try:
         chat = await USER.resolve_peer(Config.CHAT_ID)
         full_chat=await USER.send(
@@ -427,7 +430,6 @@ async def edit_title():
         await USER.send(edit)
     except Exception as e:
         LOGGER.error(f"Errors Occured while editing title - {e}")
-        pass
 
 
 async def send_playlist():
@@ -525,7 +527,6 @@ async def get_admins(chat):
                 admins.append(administrator.user.id)
         except Exception as e:
             LOGGER.error(f"Errors occured while getting admin list - {e}")
-            pass
         Config.ADMINS=admins
         Config.ADMIN_CACHE=True
     return admins
@@ -535,52 +536,54 @@ async def is_admin(_, client, message: Message):
     admins = await get_admins(Config.CHAT_ID)
     if message.from_user is None and message.sender_chat:
         return True
-    if message.from_user.id in admins:
-        return True
-    else:
-        return False
+    return message.from_user.id in admins
 
 
 async def get_playlist_str():
     if not Config.playlist:
         pl = f"▶️ **Streaming [Startup Stream]({Config.STREAM_URL}) !**"
-    else:
-        if len(Config.playlist)>=25:
-            tplaylist=Config.playlist[:25]
-            pl=f"🔂 **Listed Songs:** `25 / {len(Config.playlist)}`\n\n"
-            pl += f"▶️ **Playlist**:\n" + "\n".join([
+    elif len(Config.playlist)>=25:
+        tplaylist=Config.playlist[:25]
+        pl=f"🔂 **Listed Songs:** `25 / {len(Config.playlist)}`\n\n"
+        pl += ('▶️ **Playlist**:\n' + "\n".join([
                 f"**{i}**. **{x[1]}**\n  - **Requested By:** {x[4]}"
                 for i, x in enumerate(tplaylist)
-                ])
-            tplaylist.clear()
-        else:
-            pl = f"▶️ **Playlist**:\n" + "\n".join([
+                ]))
+        tplaylist.clear()
+    else:
+        pl = ('▶️ **Playlist**:\n' + "\n".join([
                 f"**{i}**. **{x[1]}**\n  - **Requested By:** {x[4]}\n"
                 for i, x in enumerate(Config.playlist)
-            ])
+            ]))
     return pl
 
 
 async def get_buttons():
     data=Config.DATA.get("FILE_DATA")
-    if data.get('dur', 0) == 0:
-        reply_markup=InlineKeyboardMarkup(
+    return (
+        InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton(f"{get_player_string()}", callback_data="player"),
+                    InlineKeyboardButton(
+                        f"{get_player_string()}", callback_data="player"
+                    ),
                 ],
                 [
                     InlineKeyboardButton("⏸", callback_data="pause"),
-                    InlineKeyboardButton(f"{'🔇' if Config.MUTED else '🔊'}", callback_data="mute"),
+                    InlineKeyboardButton(
+                        f"{'🔇' if Config.MUTED else '🔊'}", callback_data="mute"
+                    ),
                     InlineKeyboardButton("▶️", callback_data="resume"),
                 ],
             ]
-            )
-    else:
-        reply_markup=InlineKeyboardMarkup(
+        )
+        if data.get('dur', 0) == 0
+        else InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton(f"{get_player_string()}", callback_data='player'),
+                    InlineKeyboardButton(
+                        f"{get_player_string()}", callback_data='player'
+                    ),
                 ],
                 [
                     InlineKeyboardButton("⏮", callback_data="rewind"),
@@ -590,13 +593,15 @@ async def get_buttons():
                 ],
                 [
                     InlineKeyboardButton("🔀", callback_data="shuffle"),
-                    InlineKeyboardButton(f"{'🔇' if Config.MUTED else '🔊'}", callback_data="mute"),
+                    InlineKeyboardButton(
+                        f"{'🔇' if Config.MUTED else '🔊'}", callback_data="mute"
+                    ),
                     InlineKeyboardButton("⏩", callback_data="skip"),
                     InlineKeyboardButton("🔂", callback_data="replay"),
                 ],
             ]
-            )
-    return reply_markup
+        )
+    )
 
 
 async def progress_bar(current, zero, total, start, msg):
@@ -644,8 +649,7 @@ def get_height_and_width(file):
 @timeout(10)
 def get_duration(file):
     try:
-        total=ffmpeg.probe(file)['format']['duration']
-        return total
+        return ffmpeg.probe(file)['format']['duration']
     except:
         return 0
 
@@ -677,8 +681,7 @@ def get_player_string():
             ''.join(["━" for i in range(math.floor(percentage / 10))]),
             ''.join(["─" for i in range(10 - math.floor(percentage / 10))])
             )
-    finaal=f"{convert(played)}  {progressbar}  {convert(dur)}"
-    return finaal
+    return f"{convert(played)}  {progressbar}  {convert(dur)}"
 
 
 def TimeFormatter(milliseconds: int) -> str:
@@ -758,25 +761,21 @@ async def handler(client: PyTgCalls, update: Update):
 
 @group_call.on_stream_end()
 async def handler(client: PyTgCalls, update: Update):
-    if str(update) == "STREAM_AUDIO_ENDED" or str(update) == "STREAM_VIDEO_ENDED":
-        if not Config.STREAM_END.get("STATUS"):
-            Config.STREAM_END["STATUS"]=str(update)
-            if Config.STREAM_LINK and len(Config.playlist) == 0:
-                await stream_from_link(Config.STREAM_LINK)
-            elif Config.IS_NONSTOP_STREAM and not Config.playlist:
-                await start_stream()
-            elif not Config.IS_NONSTOP_STREAM and not Config.playlist:
-                await leave_call()
-                LOGGER.warning("Nonstop Stream Feature Disabled, So Leaving VC !")
-            else:
-                await skip()          
-            await sleep(15) # wait for max 15 sec
-            try:
-                del Config.STREAM_END["STATUS"]
-            except:
-                pass
+    if str(update) not in ["STREAM_AUDIO_ENDED", "STREAM_VIDEO_ENDED"]:
+        return
+    if not Config.STREAM_END.get("STATUS"):
+        Config.STREAM_END["STATUS"]=str(update)
+        if Config.STREAM_LINK and len(Config.playlist) == 0:
+            await stream_from_link(Config.STREAM_LINK)
+        elif Config.IS_NONSTOP_STREAM and not Config.playlist:
+            await start_stream()
+        elif not Config.IS_NONSTOP_STREAM and not Config.playlist:
+            await leave_call()
+            LOGGER.warning("Nonstop Stream Feature Disabled, So Leaving VC !")
         else:
-            try:
-                del Config.STREAM_END["STATUS"]
-            except:
-                pass
+            await skip()
+        await sleep(15) # wait for max 15 sec
+    try:
+        del Config.STREAM_END["STATUS"]
+    except:
+        pass
