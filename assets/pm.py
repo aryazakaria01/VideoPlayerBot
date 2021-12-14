@@ -22,10 +22,7 @@ from pyrogram import Client, filters
 from pyrogram.errors import BotInlineDisabled
 
 async def is_reply(_, client, message):
-    if Config.REPLY_MESSAGE:
-        return True
-    else:
-        return False
+    return bool(Config.REPLY_MESSAGE)
 
 reply_filter=filters.create(is_reply)
 
@@ -48,4 +45,3 @@ async def nopm(client, message):
         await message.reply_text(f"{Config.REPLY_MESSAGE}\n\n<b>© Powered By : \n@AsmSafone | @AsmSupport 👑</b>")
     except Exception as e:
         LOGGER.error(e)
-        pass
